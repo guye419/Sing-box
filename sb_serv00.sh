@@ -370,7 +370,7 @@ download_singbox() {
   if [ "$ARCH" == "arm" ] || [ "$ARCH" == "arm64" ] || [ "$ARCH" == "aarch64" ]; then
       FILE_INFO=("https://github.com/eooce/test/releases/download/arm64/sb web" "https://github.com/eooce/test/releases/download/arm64/bot13 bot" "https://github.com/eooce/test/releases/download/ARM/swith npm")
   elif [ "$ARCH" == "amd64" ] || [ "$ARCH" == "x86_64" ] || [ "$ARCH" == "x86" ]; then
-      FILE_INFO=("https://eooce.2go.us.kg/web web" "https://eooce.2go.us.kg/bot bot" "https://eooce.2go.us.kg/npm npm")
+      FILE_INFO=("https://github.com/eooce/test/releases/download/freebsd/sb web" "https://github.com/eooce/test/releases/download/freebsd/server bot" "https://github.com/eooce/test/releases/download/freebsd/npm npm")
   else
       echo "Unsupported architecture: $ARCH"
       exit 1
@@ -385,17 +385,39 @@ generate_random_name() {
     echo "$name"
 }
 
+download_with_fallback() {
+    local URL=$1
+    local NEW_FILENAME=$2
+
+    curl -L -sS --max-time 2 -o "$NEW_FILENAME" "$URL" &
+    CURL_PID=$!
+    CURL_START_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
+    
+    sleep 1
+    CURL_CURRENT_SIZE=$(stat -c%s "$NEW_FILENAME" 2>/dev/null || echo 0)
+    
+    if [ "$CURL_CURRENT_SIZE" -le "$CURL_START_SIZE" ]; then
+        kill $CURL_PID
+        wait $CURL_PID 2>/dev/null
+        wget -q -O "$NEW_FILENAME" "$URL"
+        echo -e "\e[1;32mDownloading $NEW_FILENAME with wget\e[0m"
+    else
+        wait $CURL_PID
+        echo -e "\e[1;32mDownloading $NEW_FILENAME with curl\e[0m"
+    fi
+}
+
 for entry in "${FILE_INFO[@]}"; do
     URL=$(echo "$entry" | cut -d ' ' -f 1)
     RANDOM_NAME=$(generate_random_name)
     NEW_FILENAME="$DOWNLOAD_DIR/$RANDOM_NAME"
     
     if [ -e "$NEW_FILENAME" ]; then
-        green "$NEW_FILENAME already exists, Skipping download"
+        echo -e "\e[1;32m$NEW_FILENAME already exists, Skipping download\e[0m"
     else
-        curl -L -sS -o "$NEW_FILENAME" "$URL"
-        green "Downloading $NEW_FILENAME"
+        download_with_fallback "$URL" "$NEW_FILENAME"
     fi
+    
     chmod +x "$NEW_FILENAME"
     FILE_MAP[$(echo "$entry" | cut -d ' ' -f 2)]="$NEW_FILENAME"
 done
